@@ -1,0 +1,13 @@
+version: '3'
+services:
+    xv6-rsicv:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        volumes:
+            - .:/xv6-riscv
+        working_dir: /xv6-riscv
+        tty: true
+        stdin_open: true
+        container_name: xv6-riscv
+        privileged: true
