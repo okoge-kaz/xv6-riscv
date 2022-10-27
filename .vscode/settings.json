@@ -1,0 +1,16 @@
+{
+    // c cpp settings
+    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 2, ColumnLimit: 0 }",
+    "[cpp]": {
+        "editor.suggest.insertMode": "replace",
+        "editor.semanticHighlighting.enabled": true,
+        "editor.tabSize": 4,
+        "editor.wordBasedSuggestions": true
+    },
+    "[c]": {
+        "editor.tabSize": 2,
+        "editor.suggest.insertMode": "replace",
+        "editor.semanticHighlighting.enabled": true,
+        "editor.wordBasedSuggestions": true
+    }
+}
