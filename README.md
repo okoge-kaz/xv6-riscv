@@ -83,6 +83,23 @@ I/O interrupts occur U-mode to S-mode interrupts transitions.
     ...
     ```
 
+-   CSR (Control/ Status Register)
+
+CPU の動作状態を参照、設定する特殊レジスタ
+
+    - M-mode CSR
+        - mstatus: M-mode machine status
+        - mepc: M-mode exception program counter(M-modeへの遷移が生じた際のProgram Counter)
+        - medeleg/ mideleg: exceptions, interrupts delegation (例外、割り込みの移譲を設定)
+        ...
+
+-   trap vector
+
+トラップ発生時の制御の移動先(アドレス)
+
+    - mtvec: M-modeに遷移するトラップ用
+    - stvec: S-modeに遷移するトラップ用(U -> S, S -> S)
+
 ## Environment
 
 enter to xv6 environment
