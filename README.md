@@ -114,3 +114,52 @@ quit from xv6 environment
 1. type `Ctrl + A` and `X`
 
 [Note] xv6 doesn't support `Ctrl + C` to quit.
+
+## How to add new command
+
+### user command
+
+### system call
+
+- [`kalloc(void)`](kernel/kalloc.c)
+
+    Line: 51
+    ```c
+    if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+    panic("kfree");
+    ```
+
+    `(uint64)pa % PGSIZE) != 0` means pa(= page address) is not aligned to PGSIZE(= page size).
+
+    `(char*)pa < end` means pa is not in the kernel memory.(kernel memory is from `end` to `PHYSTOP`)
+
+    `(uint64)pa >= PHYSTOP` means pa is not in the kernel memory.(kernel memory is from `end` to `PHYSTOP`)
+
+    ![memory map](public/risc-v-address.png)
+
+    [Note] `end` is defined in [kernel/entry.S](kernel/entry.S)
+
+    Line 55
+    ```c
+    memset((char*)pa, 1, n);
+    ```
+    `memset` is defined in [kernel/string.c](kernel/string.c)
+
+    argument 1: `void*` is the address of the memory to be set.
+    argument 2: `int` is the value to be set.
+    argument 3: `uint` is the number of bytes to be set.
+
+    Line 59 - 62
+    ```c
+    acquire(&kmem.lock);
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+    release(&kmem.lock);
+    ```
+    `acquire` is defined in [kernel/spinlock.c](kernel/spinlock.c)
+    r->next = kmem.freelist; means r->next is the next free page.
+
+    `kmem.freelist` is the head of the free page list.
+    address which pa points is now free. So, we add it to the free page list.
+
+    `kmem.freelist = r;` means the above explanation.
