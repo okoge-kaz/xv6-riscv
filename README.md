@@ -115,15 +115,20 @@ quit from xv6 environment
 
 [Note] xv6 doesn't support `Ctrl + C` to quit.
 
+run user tests
+
+1. `usertests` (after `make qemu`)
+
 ## How to add new command
 
 ### user command
 
 ### system call
 
-- [`kalloc(void)`](kernel/kalloc.c)
+-   [`kalloc(void)`](kernel/kalloc.c)
 
     Line: 51
+
     ```c
     if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
@@ -140,9 +145,11 @@ quit from xv6 environment
     [Note] `end` is defined in [kernel/entry.S](kernel/entry.S)
 
     Line 55
+
     ```c
     memset((char*)pa, 1, n);
     ```
+
     `memset` is defined in [kernel/string.c](kernel/string.c)
 
     argument 1: `void*` is the address of the memory to be set.
@@ -150,12 +157,14 @@ quit from xv6 environment
     argument 3: `uint` is the number of bytes to be set.
 
     Line 59 - 62
+
     ```c
     acquire(&kmem.lock);
     r->next = kmem.freelist;
     kmem.freelist = r;
     release(&kmem.lock);
     ```
+
     `acquire` is defined in [kernel/spinlock.c](kernel/spinlock.c)
     r->next = kmem.freelist; means r->next is the next free page.
 
