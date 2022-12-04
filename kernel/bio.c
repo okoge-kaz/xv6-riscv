@@ -89,6 +89,9 @@ bget(uint dev, uint blockno)
 }
 
 // Return a locked buf with the contents of the indicated block.
+//
+// dev [uint] - device number
+// blockno [uint] - block number
 struct buf*
 bread(uint dev, uint blockno)
 {

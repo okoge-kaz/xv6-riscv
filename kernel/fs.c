@@ -429,6 +429,13 @@ itrunc(struct inode *ip)
   struct buf *bp;
   uint *a;
 
+  // free all the direct blocks (直接参照のブロックを全て解放)
+  //
+  // ip->addrs[0] ~ ip->addrs[NDIRECT-1]
+  // ip->addrs[i] = 0 means the block is not allocated
+  //
+  // if (ip->addrs[i]) means if the block is allocated
+  // (ip->addrs[i] != 0) でブロックにアドレスが割り当てられているかどうかを確認
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
@@ -436,6 +443,10 @@ itrunc(struct inode *ip)
     }
   }
 
+  // free all the indirect blocks (間接参照のブロックを全て解放)
+  //
+  // bp [buf] = indirect block (address1 ~ address256)
+  // NINDIRECT = 256
   if(ip->addrs[NDIRECT]){
     bp = bread(ip->dev, ip->addrs[NDIRECT]);
     a = (uint*)bp->data;
