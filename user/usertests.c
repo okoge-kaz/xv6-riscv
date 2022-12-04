@@ -418,7 +418,55 @@ truncate3(char *s)
   unlink("truncfile");
   exit(xstatus);
 }
-  
+
+// test O_APPEND.
+void
+append1(char *s)
+{
+  char buf[32];
+
+  unlink("appendfile");
+  int fd1 = open("appendfile", O_CREATE|O_WRONLY|O_TRUNC);
+  write(fd1, "abcd", 4);
+  close(fd1);
+
+  int fd2 = open("appendfile", O_RDONLY);
+  int n = read(fd2, buf, sizeof(buf));
+  if(n != 4){
+    printf("%s: read %d bytes, wanted 4\n", s, n);
+    printf("file=%s\n", buf);
+    exit(1);
+  }
+  close(fd2);
+
+  fd1 = open("appendfile", O_WRONLY|O_APPEND);
+  write(fd1, "efgh", 4);
+  close(fd1);
+
+  fd2 = open("appendfile", O_RDONLY);
+  n = read(fd2, buf, sizeof(buf));
+  if(n != 8){
+    printf("%s: read %d bytes, wanted 8\n", s, n);
+    printf("file=%s\n", buf);
+    exit(1);
+  }
+  close(fd2);
+
+  fd1 = open("appendfile", O_WRONLY|O_APPEND);
+  write(fd1, "ijklmnop", 8);
+  close(fd1);
+
+  fd2 = open("appendfile", O_RDONLY);
+  n = read(fd2, buf, sizeof(buf));
+  if(n != 16){
+    printf("%s: read %d bytes, wanted 16\n", s, n);
+    printf("file=%s\n", buf);
+    exit(1);
+  }
+  close(fd2);
+
+  unlink("appendfile");
+}
 
 // does chdir() call iput(p->cwd) in a transaction?
 void
@@ -2584,6 +2632,7 @@ struct test {
   {truncate1, "truncate1"},
   {truncate2, "truncate2"},
   {truncate3, "truncate3"},
+  {append1, "append1"},
   {openiputtest, "openiput"},
   {exitiputtest, "exitiput"},
   {iputtest, "iput"},
