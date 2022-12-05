@@ -473,65 +473,78 @@ void
 lseek1(char *s){
 
   unlink("seekfile");
-  int fd1 = open("seekfile", O_CREATE|O_RDWR);
+  int fd1 = open("seekfile", O_CREATE|O_RDWR|O_APPEND);
   if (fd1 < 0) {
     printf("open failed\n");
     exit(1);
   }
-  write(fd1, "hello", 5);
+  write(fd1, "hello", 6);
 
-  lseek(fd1, 0, SEEK_SET);// オフセットをファイルの先頭に戻す
-  char buf[5];
-  int n = read(fd1, buf, 5);
-  if (n != 5) {
-    printf("read failed\n");
-    printf("buf=%s, n=%d, expected=%d\n", buf, n, 5);
-    exit(1);
-  }
-
-  int off = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
-  write(fd1, "world", 5);
-
-  int fd2 = open("seekfile", O_RDONLY);
-  if (fd2 < 0) {
-    printf("open failed\n");
-    exit(1);
-  }
-
-  char buf1[205];
-  n = read(fd2, buf1, 205);
-  if (n != 205) {
-    printf("read failed\n");
-    printf("buf=%s, n=%d, expected=%d\n", buf1, n, 205);
-    exit(1);
-  }
-  close(fd2);
-
-  int off1 = lseek(fd1, -205, SEEK_CUR);// オフセットを現在の位置から205バイト分戻す
-  char buf2[5];
-  n = read(fd1, buf2, 5);
-  if (n != 5) {
-    printf("read failed\n");
-    printf("buf=%s, n=%d, expected=%d\n", buf2, n, 5);
-    exit(1);
-  }
-
-  int off2 = lseek(fd1, 0, SEEK_CUR);// オフセットを変更しない。現在のオフセットを得る
-  if (off1 != off2) {
+  int off1 = lseek(fd1, 0, SEEK_SET);// オフセットをファイルの先頭に戻す
+  // off1 = 0
+  if (off1 != 0) {
     printf("lseek failed\n");
-    printf("off=%d, off1=%d\n", off, off1);
+    printf("off1=%d, expected 0\n", off1);
     exit(1);
   }
 
-  int off3 = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
-  if (off3 != off + 5) {
+  char buf[6];
+  int n = read(fd1, buf, 6);
+  if (n != 6) {
+    printf("read failed\n");
+    printf("buf=%s, n=%d, expected=%d\n", buf, n, 6);
+    exit(1);
+  }
+
+  int off2 = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
+  // off2 = 200
+  if (off2 != 200) {
     printf("lseek failed\n");
-    printf("off=%d, off3=%d\n", off, off3);
+    printf("off2=%d, expected 200\n", off2);
     exit(1);
   }
 
-  lseek(fd1, 100, SEEK_END);// ファイル末尾に100バイト追加する。追加した各バイトの値は0
-  exit(0);
+  int off3 = lseek(fd1, -200, SEEK_CUR);// オフセットを現在の位置から200バイト分戻す
+  // off3 = 0
+  if (off3 != 0) {
+    printf("lseek failed\n");
+    printf("off3=%d, expected 0\n", off3);
+    exit(1);
+  }
+
+  int off4 = lseek(fd1, 0, SEEK_CUR);// オフセットを変更しない。現在のオフセットを得る
+  // off3 == off4
+  if (off3 != off4) {
+    printf("lseek failed\n");
+    printf("off3=%d, off4=%d, expected off3 == off4\n", off3, off4);
+    exit(1);
+  }
+
+  int off5 = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+  // off5 = 6 (hello + \0)
+  if (off5 != 6) {
+    printf("lseek failed\n");
+    printf("off5=%d, expected 6\n", off5);
+    exit(1);
+  }
+
+  int off6 = lseek(fd1, 100, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+  // off6 = 106 (hello + 100 \0)
+  if (off6 != 106) {
+    printf("lseek failed\n");
+    printf("off6=%d, expected 106\n", off6);
+    exit(1);
+  }
+
+  int off7 = lseek(fd1, -100, SEEK_CUR);// オフセットを100バイト戻す
+  // off7 = 6
+  if (off7 != 6) {
+    printf("lseek failed\n");
+    printf("off7=%d, expected 6\n", off7);
+    exit(1);
+  }
+
+  unlink("seekfile");
 }
 
 // does chdir() call iput(p->cwd) in a transaction?
