@@ -485,7 +485,7 @@ lseek1(char *s){
   int n = read(fd1, buf, 5);
   if (n != 5) {
     printf("read failed\n");
-    printf("buf=%s, n=%d\n", buf, n);
+    printf("buf=%s, n=%d, expected=%d\n", buf, n, 5);
     exit(1);
   }
 
@@ -502,7 +502,7 @@ lseek1(char *s){
   n = read(fd2, buf1, 205);
   if (n != 205) {
     printf("read failed\n");
-    printf("buf=%s, n=%d\n", buf1, n);
+    printf("buf=%s, n=%d, expected=%d\n", buf1, n, 205);
     exit(1);
   }
   close(fd2);
@@ -512,7 +512,7 @@ lseek1(char *s){
   n = read(fd1, buf2, 5);
   if (n != 5) {
     printf("read failed\n");
-    printf("buf=%s, n=%d\n", buf2, n);
+    printf("buf=%s, n=%d, expected=%d\n", buf2, n, 5);
     exit(1);
   }
 
