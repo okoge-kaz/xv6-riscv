@@ -179,34 +179,3 @@ filewrite(struct file *f, uint64 addr, int n)
 
   return ret;
 }
-
-// Allocate a file descriptor for the given file.
-// fd [int] : file descriptor
-// offset [int] : offset (オフセット)
-// whence [int] : whence (どこから読み込むか)
-int lseek(int fd, int offset, int whence) {
-  struct proc *p = myproc(); // get current process
-  struct file *f;
-
-  // fd < 0 : invalid file descriptor
-  // fd >= NOFILE : invalid file descriptor
-  // p->ofile[fd] == 0 : file is not opened
-  if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
-    return -1;
-
-  if(f->type == FD_INODE){
-    ilock(f->ip);
-    if(whence == SEEK_SET) {
-      f->off = offset; // offset from the beginning of the file (offsetの位置)
-    } else if(whence == SEEK_CUR) {
-      f->off += offset; // offset from the current position (現在のoffsetにoffsetを加えた値)
-    } else if(whence == SEEK_END) {
-      f->off = f->ip->size + offset; // offset from the end of the file (ファイルサイズにoffsetを加えた値)
-    } else {
-      return -1;
-    }
-    iunlock(f->ip);
-    return f->off;
-  }
-  return -1;
-}
