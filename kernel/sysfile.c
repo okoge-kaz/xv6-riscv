@@ -508,3 +508,38 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_lseek(void)
+{
+  int fd, offset, whence;
+
+  struct file *f; // file pointer
+  struct proc *p = myproc(); // current process
+
+  argint(0, &fd);
+  argint(1, &offset);
+  argint(2, &whence);
+
+  // fd < 0 : invalid file descriptor
+  // fd >= NOFILE : invalid file descriptor
+  // p->ofile[fd] == 0 : file is not opened
+  if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
+    return -1;
+
+  if(f->type == FD_INODE){
+    ilock(f->ip);
+    if(whence == SEEK_SET) {
+      f->off = offset; // offset from the beginning of the file (offsetの位置)
+    } else if(whence == SEEK_CUR) {
+      f->off += offset; // offset from the current position (現在のoffsetにoffsetを加えた値)
+    } else if(whence == SEEK_END) {
+      f->off = f->ip->size + offset; // offset from the end of the file (ファイルサイズにoffsetを加えた値)
+    } else {
+      return -1;
+    }
+    iunlock(f->ip);
+    return f->off;
+  }
+  return -1;
+}
