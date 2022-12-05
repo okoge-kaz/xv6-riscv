@@ -547,6 +547,50 @@ lseek1(char *s){
   unlink("seekfile");
 }
 
+void
+lseek2(char * s){
+  unlink("seekfile");
+  int fd1 = open("seekfile", O_CREATE|O_WRONLY);
+  if (fd1 < 0) {
+    printf("open failed\n");
+    exit(1);
+  }
+  write(fd1, "Good bye!\n", 11);
+  close(fd1);
+
+  fd1 = open("seekfile", O_WRONLY);
+  if (fd1 < 0) {
+    printf("open failed\n");
+    exit(1);
+  }
+
+  lseek(fd1, 5, SEEK_SET);
+  write(fd1, "night!\n", 7);
+  close(fd1);
+
+  fd1 = open("seekfile", O_RDONLY);
+  if (fd1 < 0) {
+    printf("open failed\n");
+    exit(1);
+  }
+
+  char buf[20];
+  int n = read(fd1, buf, 20);
+  if (n != 12) {
+    printf("read failed\n");
+    printf("buf=%s, n=%d, expected=%d\n", buf, n, 12);
+    exit(1);
+  }
+
+  if (strcmp(buf, "Good night!\n") != 0) {
+    printf("read failed\n");
+    printf("buf=%s, expected=%s\n", buf, "Good night!\n");
+    exit(1);
+  }
+
+  unlink("seekfile");
+}
+
 // does chdir() call iput(p->cwd) in a transaction?
 void
 iputtest(char *s)
@@ -2713,6 +2757,7 @@ struct test {
   {truncate3, "truncate3"},
   {append1, "append1"},
   {lseek1, "lseek1"},
+  {lseek2, "lseek2"},
   {openiputtest, "openiput"},
   {exitiputtest, "exitiput"},
   {iputtest, "iput"},
