@@ -12,5 +12,18 @@
         "editor.suggest.insertMode": "replace",
         "editor.semanticHighlighting.enabled": true,
         "editor.wordBasedSuggestions": true
+    },
+    "files.associations": {
+        "__config": "c",
+        "locale": "c",
+        "__hash_table": "c",
+        "__split_buffer": "c",
+        "array": "c",
+        "bitset": "c",
+        "initializer_list": "c",
+        "unordered_map": "c",
+        "vector": "c",
+        "fcntl.h": "c",
+        "fs.h": "c"
     }
 }
