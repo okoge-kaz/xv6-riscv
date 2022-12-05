@@ -468,6 +468,72 @@ append1(char *s)
   unlink("appendfile");
 }
 
+// test lseek.
+void
+lseek1(char *s){
+
+  unlink("seekfile");
+  int fd1 = open("seekfile", O_CREATE|O_RDWR);
+  if (fd1 < 0) {
+    printf("open failed\n");
+    exit(1);
+  }
+  write(fd1, "hello", 5);
+
+  lseek(fd1, 0, SEEK_SET);// オフセットをファイルの先頭に戻す
+  char buf[5];
+  int n = read(fd1, buf, 5);
+  if (n != 5) {
+    printf("read failed\n");
+    printf("buf=%s, n=%d\n", buf, n);
+    exit(1);
+  }
+
+  int off = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
+  write(fd1, "world", 5);
+
+  int fd2 = open("seekfile", O_RDONLY);
+  if (fd2 < 0) {
+    printf("open failed\n");
+    exit(1);
+  }
+
+  char buf1[205];
+  n = read(fd2, buf1, 205);
+  if (n != 205) {
+    printf("read failed\n");
+    printf("buf=%s, n=%d\n", buf1, n);
+    exit(1);
+  }
+  close(fd2);
+
+  int off1 = lseek(fd1, -205, SEEK_CUR);// オフセットを現在の位置から205バイト分戻す
+  char buf2[5];
+  n = read(fd1, buf2, 5);
+  if (n != 5) {
+    printf("read failed\n");
+    printf("buf=%s, n=%d\n", buf2, n);
+    exit(1);
+  }
+
+  int off2 = lseek(fd1, 0, SEEK_CUR);// オフセットを変更しない。現在のオフセットを得る
+  if (off1 != off2) {
+    printf("lseek failed\n");
+    printf("off=%d, off1=%d\n", off, off1);
+    exit(1);
+  }
+
+  int off3 = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+  if (off3 != off + 5) {
+    printf("lseek failed\n");
+    printf("off=%d, off3=%d\n", off, off3);
+    exit(1);
+  }
+
+  lseek(fd1, 100, SEEK_END);// ファイル末尾に100バイト追加する。追加した各バイトの値は0
+  exit(0);
+}
+
 // does chdir() call iput(p->cwd) in a transaction?
 void
 iputtest(char *s)
@@ -2633,6 +2699,7 @@ struct test {
   {truncate2, "truncate2"},
   {truncate3, "truncate3"},
   {append1, "append1"},
+  {lseek1, "lseek1"},
   {openiputtest, "openiput"},
   {exitiputtest, "exitiput"},
   {iputtest, "iput"},
