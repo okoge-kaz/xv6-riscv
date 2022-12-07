@@ -527,8 +527,13 @@ sys_lseek(void)
   if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
     return -1;
 
+  // 操作対象が通常のファイルの場合
   if(f->type == FD_INODE){
     ilock(f->ip);
+
+    // 更新前のoffsetを保存
+    uint old_offset = f->off;
+
     if(whence == SEEK_SET) {
       f->off = offset; // offset from the beginning of the file (offsetの位置)
     } else if(whence == SEEK_CUR) {
@@ -536,8 +541,27 @@ sys_lseek(void)
     } else if(whence == SEEK_END) {
       f->off = f->ip->size + offset; // offset from the end of the file (ファイルサイズにoffsetを加えた値)
     } else {
+      iunlock(f->ip);
       return -1;
     }
+
+    // 計算された新しいオフセットがファイルサイズより大きい場合
+    // new_offset > file_size
+    if(f->off > f->ip->size) {
+      // file sizeを更新
+      f->ip->size = f->off;
+      // file sizeをdiskに書き込み
+      // iupdate(f->ip);
+    }
+
+    // new_offset < 0 OR new_offset > file_size limit
+    if(f->off < 0 || f->off > MAXFILE * BSIZE) {
+      // offsetを更新前の値に戻す
+      f->off = old_offset;
+      iunlock(f->ip);
+      return -1;
+    }
+
     iunlock(f->ip);
     return f->off;
   }

@@ -521,26 +521,26 @@ lseek1(char *s){
   }
 
   int off5 = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
-  // off5 = 6 (hello + \0)
-  if (off5 != 6) {
+  // off5 = 200
+  if (off5 != 200) {
     printf("lseek failed\n");
-    printf("off5=%d, expected 6\n", off5);
+    printf("off5=%d, expected 200\n", off5);
     exit(1);
   }
 
-  int off6 = lseek(fd1, 100, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
-  // off6 = 106 (hello + 100 \0)
-  if (off6 != 106) {
+  int off6 = lseek(fd1, 100, SEEK_END);// ファイル末尾に100バイト追加する
+  // off6 = 300
+  if (off6 != 300) {
     printf("lseek failed\n");
-    printf("off6=%d, expected 106\n", off6);
+    printf("off6=%d, expected 300\n", off6);
     exit(1);
   }
 
   int off7 = lseek(fd1, -100, SEEK_CUR);// オフセットを100バイト戻す
-  // off7 = 6
-  if (off7 != 6) {
+  // off7 = 200
+  if (off7 != 200) {
     printf("lseek failed\n");
-    printf("off7=%d, expected 6\n", off7);
+    printf("off7=%d, expected 200\n", off7);
     exit(1);
   }
 
@@ -588,6 +588,50 @@ lseek2(char * s){
     exit(1);
   }
 
+  unlink("seekfile");
+}
+
+void
+lseek3(char * s){
+  unlink("seekfile");
+  int fd1 = open("seekfile", O_CREATE|O_WRONLY);
+  if (fd1 < 0) {
+    printf("open failed\n");
+    exit(1);
+  }
+  write(fd1, "Hello World", 12);
+  close(fd1);
+
+  fd1 = open("seekfile", O_RDWR);
+  int offset = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
+  if (offset != 200) {
+    printf("lseek failed\n");
+    printf("offset=%d, expected 200\n", offset);
+    exit(1);
+  }
+
+  int file_size = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+  if (file_size != 200) {
+    printf("lseek failed\n");
+    printf("file_size=%d, expected 200\n", file_size);
+    exit(1);
+  }
+
+  int error = lseek(fd1, -250, SEEK_CUR);// オフセットを現在の位置から250バイト分戻す (オフセットが負になる)
+  if (error != -1) {// error
+    printf("lseek failed\n");
+    printf("error=%d, expected -1\n", error);
+  }
+
+  // errorが起きた場合は、オフセットは変化しない
+  int offset2 = lseek(fd1, 0, SEEK_CUR);
+  if (offset2 != 200) {
+    printf("lseek failed\n");
+    printf("offset2=%d, expected 200\n", offset2);
+    exit(1);
+  }
+
+  close(fd1);
   unlink("seekfile");
 }
 
@@ -2758,6 +2802,7 @@ struct test {
   {append1, "append1"},
   {lseek1, "lseek1"},
   {lseek2, "lseek2"},
+  {lseek3, "lseek3"},
   {openiputtest, "openiput"},
   {exitiputtest, "exitiput"},
   {iputtest, "iput"},
