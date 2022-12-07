@@ -24,6 +24,7 @@
         "unordered_map": "c",
         "vector": "c",
         "fcntl.h": "c",
-        "fs.h": "c"
+        "fs.h": "c",
+        "chrono": "c"
     }
 }
