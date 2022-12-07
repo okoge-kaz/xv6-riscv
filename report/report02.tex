@@ -1,0 +1,368 @@
+\RequirePackage{plautopatch}
+\RequirePackage[l2tabu, orthodox]{nag}
+
+\documentclass[platex,dvipdfmx, titlepage]{jlreq} % for platex
+
+\usepackage{graphicx}
+\usepackage{bxtexlogo}
+\usepackage{here}
+\usepackage{url}
+
+\usepackage{listings, jlisting, color}
+\definecolor{OliveGreen}{rgb}{0.0,0.6,0.0}
+\definecolor{Orenge}{rgb}{0.89,0.55,0}
+\definecolor{SkyBlue}{rgb}{0.28, 0.28, 0.95}
+\lstset{
+  language={C}, % 言語の指定
+  basicstyle={\ttfamily},
+  identifierstyle={\small},
+  commentstyle={\smallitshape},
+  keywordstyle={\small\bfseries},
+  ndkeywordstyle={\small},
+  stringstyle={\small\ttfamily},
+  frame={tb},
+  breaklines=true,
+  columns=[l]{fullflexible},
+  numbers=left,
+  xrightmargin=0zw,
+  xleftmargin=0zw,
+  numberstyle={\scriptsize},
+  stepnumber=1,
+  numbersep=1zw,
+  lineskip=-0.5ex,
+  keywordstyle={\color{SkyBlue}},     %キーワード(int, ifなど)の書体指定
+  commentstyle={\color{OliveGreen}},  %注釈の書体
+  stringstyle=\color{Orenge}          %文字列
+}
+
+\usepackage{tcolorbox}
+\newtcbox{\code}[1][]{
+  colback=gray!10!white,
+  colframe=gray!20!white,
+  boxrule=1pt,
+  left=0mm,right=0mm,top=0mm,bottom=0mm,
+  box align=base,
+  nobeforeafter,
+  fontupper=\ttfamily
+}
+
+\title{システムソフトウェア 第２回課題}
+
+\author{学生番号 20B30790 藤井 一喜}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{ファイルシステムAPI強化}
+
+\subsection{openへのO\_APPENDフラグの追加}
+
+\subsubsection*{実装}
+
+\code{kernel/fcntl.h}にO\_APPENDフラグを追加した。また\code{kernel/sysfile.c}に
+
+\begin{lstlisting}[caption={kernel/fcntl.h}]
+if((omode & O_APPEND) && ip->type == T_FILE){
+  // seek to end of file
+  f->off = ip->size;
+}
+\end{lstlisting}
+
+\noindent を追加した。これにより、ファイルをオープンする際にO\_APPENDフラグが指定されている場合、ファイルオフセットがファイルの末尾に設定されるようになった。
+
+\noindent 次に、リダイレクション \code{>>} を追加するために \code{user/sh.c} を以下のように変更した。
+
+\begin{lstlisting}[caption={user/sh.c}]
+    case '+':  // >>
+        cmd = redircmd(cmd, q, eq, O_WRONLY|O_CREATE|O_APPEND, 1);
+    break;
+\end{lstlisting}
+
+\subsubsection*{テスト}
+
+以下のように、テストプログラムを作成し、\code{make qemu}後に\code{usertests}を実行することで、O\_APPENDフラグが正しく機能していることを確認した。
+また、\code{>>} (リダイレクション)に関しては、\code{make qemu}後に、実際に\code{echo hello >> test.txt}を実行し、ファイルの末尾に文字列が追加されていることを確認した。
+
+\begin{lstlisting}[caption={user/usertests.c}]
+// test O_APPEND.
+void
+append1(char *s)
+{
+  char buf[32];
+
+  unlink("appendfile");
+  int fd1 = open("appendfile", O_CREATE|O_WRONLY|O_TRUNC);
+  write(fd1, "abcd", 4);
+  close(fd1);
+
+  int fd2 = open("appendfile", O_RDONLY);
+  int n = read(fd2, buf, sizeof(buf));
+  if(n != 4){
+    printf("%s: read %d bytes, wanted 4\n", s, n);
+    printf("file=%s\n", buf);
+    exit(1);
+  }
+  close(fd2);
+
+  fd1 = open("appendfile", O_WRONLY|O_APPEND);
+  write(fd1, "efgh", 4);
+  close(fd1);
+
+  fd2 = open("appendfile", O_RDONLY);
+  n = read(fd2, buf, sizeof(buf));
+  if(n != 8){
+    printf("%s: read %d bytes, wanted 8\n", s, n);
+    printf("file=%s\n", buf);
+    exit(1);
+  }
+  close(fd2);
+
+  fd1 = open("appendfile", O_WRONLY|O_APPEND);
+  write(fd1, "ijklmnop", 8);
+  close(fd1);
+
+  fd2 = open("appendfile", O_RDONLY);
+  n = read(fd2, buf, sizeof(buf));
+  if(n != 16){
+    printf("%s: read %d bytes, wanted 16\n", s, n);
+    printf("file=%s\n", buf);
+    exit(1);
+  }
+  close(fd2);
+
+  unlink("appendfile");
+}
+
+... (abbreviated) ...
+
+  { "append1", append1 },
+\end{lstlisting}
+
+テストコードの内容としては、O\_APPENDフラグが正しく機能しているかどうかを確認するために、文字列をファイル末尾に追加する動作を繰り返し、ファイルの内容が正しいかどうかを確認するというものである。
+
+\subsection{システムコールlseekの追加}
+
+\subsubsection*{実装}
+
+system callを追加するために、\code{user/usys.pl}に \code{entry("lseek");}を追加し、\code{user/user.h}に \code{int lseek(int, int, int);}を追加、\code{kernel/sysycall.h}に以下を追加した。
+
+\begin{lstlisting}[caption={kernel/sysycall.h}]
+    #define SYS_lseek  23
+\end{lstlisting}
+
+\noindent また、\code{kernel/sysycall.c}に
+
+\begin{lstlisting}[caption={kernel/sysycall.c}]
+    extern uint64 sys_lseek(void);
+    ...
+    [SYS_lseek]   sys_lseek,
+\end{lstlisting}
+\noindent を追加、\code{kernel/fcntl.h}に以下を追加した。
+
+\begin{lstlisting}[caption={kernel/fcntl.h}]
+    #define SEEK_SET 0
+    #define SEEK_CUR 1
+    #define SEEK_END 2
+\end{lstlisting}
+
+\noindent また、\code{kernel/sysfile.c}に以下を追加した。
+
+\begin{lstlisting}[caption={kernel/sysfile.c}]
+uint64
+sys_lseek(void)
+{
+  int fd, offset, whence;
+  struct file *f; // file pointer
+  struct proc *p = myproc(); // current process
+  
+  argint(0, &fd);
+  argint(1, &offset);
+  argint(2, &whence);
+  
+  // fd < 0 : invalid file descriptor
+  // fd >= NOFILE : invalid file descriptor
+  // p->ofile[fd] == 0 : file is not opened 
+  if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
+    return -1;
+
+  if(f->type == FD_INODE){
+    ilock(f->ip);
+    if(whence == SEEK_SET) {
+      f->off = offset; // offset from the beginning of the file (offsetの位置)
+    } else if(whence == SEEK_CUR) {
+      f->off += offset; // offset from the current position (現在のoffsetにoffsetを加えた値)
+    } else if(whence == SEEK_END) {
+      f->off = f->ip->size + offset; // offset from the end of the file (ファイルサイズにoffsetを加えた値)
+    } else {
+      return -1;
+    }
+    iunlock(f->ip);
+    return f->off;
+  }
+  return -1;
+}
+\end{lstlisting}
+
+方針としては、typeがFD\_INODEの場合に、\code{f->off}を変更することで、lseekを実現することにした。
+
+また、問題文にあるように whence には、\code{SEEK\_SET}、\code{SEEK\_CUR}、\code{SEEK\_END}のいずれかが入ることになるので、それぞれの場合に対応するように場合分けを施し、新しいオフセットを計算するようにした。
+
+実装全体は、私の個人リポジトリにある。(\url{https://github.com/okoge-kaz/xv6-riscv})
+
+\subsubsection*{テスト}
+
+以下のようなテストコードを追加した。
+
+\begin{lstlisting}[caption={user/usertests.c}]
+    // test lseek.
+    void
+    lseek1(char *s){
+    
+      unlink("seekfile");
+      int fd1 = open("seekfile", O_CREATE|O_RDWR|O_APPEND);
+      if (fd1 < 0) {
+        printf("open failed\n");
+        exit(1);
+      }
+      write(fd1, "hello", 6);
+    
+      int off1 = lseek(fd1, 0, SEEK_SET);// オフセットをファイルの先頭に戻す
+      // off1 = 0
+      if (off1 != 0) {
+        printf("lseek failed\n");
+        printf("off1=%d, expected 0\n", off1);
+        exit(1);
+      }
+    
+      char buf[6];
+      int n = read(fd1, buf, 6);
+      if (n != 6) {
+        printf("read failed\n");
+        printf("buf=%s, n=%d, expected=%d\n", buf, n, 6);
+        exit(1);
+      }
+    
+      int off2 = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
+      // off2 = 200
+      if (off2 != 200) {
+        printf("lseek failed\n");
+        printf("off2=%d, expected 200\n", off2);
+        exit(1);
+      }
+    
+      int off3 = lseek(fd1, -200, SEEK_CUR);// オフセットを現在の位置から200バイト分戻す
+      // off3 = 0
+      if (off3 != 0) {
+        printf("lseek failed\n");
+        printf("off3=%d, expected 0\n", off3);
+        exit(1);
+      }
+    
+      int off4 = lseek(fd1, 0, SEEK_CUR);// オフセットを変更しない。現在のオフセットを得る
+      // off3 == off4
+      if (off3 != off4) {
+        printf("lseek failed\n");
+        printf("off3=%d, off4=%d, expected off3 == off4\n", off3, off4);
+        exit(1);
+      }
+    
+      int off5 = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+      // off5 = 6 (hello + \0)
+      if (off5 != 6) {
+        printf("lseek failed\n");
+        printf("off5=%d, expected 6\n", off5);
+        exit(1);
+      }
+    
+      int off6 = lseek(fd1, 100, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+      // off6 = 106 (hello + 100 \0)
+      if (off6 != 106) {
+        printf("lseek failed\n");
+        printf("off6=%d, expected 106\n", off6);
+        exit(1);
+      }
+    
+      int off7 = lseek(fd1, -100, SEEK_CUR);// オフセットを100バイト戻す
+      // off7 = 6
+      if (off7 != 6) {
+        printf("lseek failed\n");
+        printf("off7=%d, expected 6\n", off7);
+        exit(1);
+      }
+    
+      unlink("seekfile");
+    }
+    
+    void
+    lseek2(char * s){
+      unlink("seekfile");
+      int fd1 = open("seekfile", O_CREATE|O_WRONLY);
+      if (fd1 < 0) {
+        printf("open failed\n");
+        exit(1);
+      }
+      write(fd1, "Good bye!\n", 11);
+      close(fd1);
+    
+      fd1 = open("seekfile", O_WRONLY);
+      if (fd1 < 0) {
+        printf("open failed\n");
+        exit(1);
+      }
+    
+      lseek(fd1, 5, SEEK_SET);
+      write(fd1, "night!\n", 7);
+      close(fd1);
+    
+      fd1 = open("seekfile", O_RDONLY);
+      if (fd1 < 0) {
+        printf("open failed\n");
+        exit(1);
+      }
+    
+      char buf[20];
+      int n = read(fd1, buf, 20);
+      if (n != 12) {
+        printf("read failed\n");
+        printf("buf=%s, n=%d, expected=%d\n", buf, n, 12);
+        exit(1);
+      }
+    
+      if (strcmp(buf, "Good night!\n") != 0) {
+        printf("read failed\n");
+        printf("buf=%s, expected=%s\n", buf, "Good night!\n");
+        exit(1);
+      }
+    
+      unlink("seekfile");
+    }
+\end{lstlisting}
+
+lseek1 のテストについては、ファイルディスクリプタのオフセットを移動させ、想定した通りの挙動であるかどうかを確認している。
+この際、SEEK\_SET, SEEK\_CUR, SEEK\_END の挙動すべてを確認している
+
+また、lseek2では、ファイル書き込みの際に、オフセットを移動させて書き込みを行うことで、想定する文字列が得られるかどうかを確認することを通じて、lseekの挙動を確認している。
+
+この実装についても、個人リポジトリにて全体を公開している。(\url{https://github.com/okoge-kaz/xv6-riscv})
+
+\subsection{得られた知見}
+
+
+
+\subsection{環境}
+
+講義にて用意されている Docker Image を使用している。(docker-compose を用いて \code{docker compose up}にて起動できるようにして使用した。)
+
+\begin{itemize}
+    \item PC: MacStudio 2021 M1 Max
+    \item Memory: 64 GB
+    \item OS: macOS 13.0.1
+\end{itemize}
+
+\subsection{参考文献}
+
+UNIX/Linux プログラミング教室 冨永和人, 権堂克彦
+
+\end{document}
