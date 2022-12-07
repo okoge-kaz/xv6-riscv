@@ -70,7 +70,7 @@ if((omode & O_APPEND) && ip->type == T_FILE){
 }
 \end{lstlisting}
 
-\noindent を追加した。これにより、ファイルをオープンする際にO\_APPENDフラグが指定されている場合、ファイルオフセットがファイルの末尾に設定されるようになった。
+\noindent を追加した。これにより、ファイルをオープンする際にO\_APPENDフラグが指定されている場合、オフセットがファイルの末尾に設定されるようになった。
 
 \noindent 次に、リダイレクション \code{>>} を追加するために \code{user/sh.c} を以下のように変更した。
 
@@ -83,7 +83,7 @@ if((omode & O_APPEND) && ip->type == T_FILE){
 \subsubsection*{テスト}
 
 以下のように、テストプログラムを作成し、\code{make qemu}後に\code{usertests}を実行することで、O\_APPENDフラグが正しく機能していることを確認した。
-また、\code{>>} (リダイレクション)に関しては、\code{make qemu}後に、実際に\code{echo hello >> test.txt}を実行し、ファイルの末尾に文字列が追加されていることを確認した。
+また、\code{>>} (リダイレクション)に関しては、\code{make qemu}後に、あらかじめ作成しておいたtest.txtに対して、実際に\code{echo hello >> test.txt}を実行し、ファイルの末尾に文字列が追加されていることを確認した。
 
 \begin{lstlisting}[caption={user/usertests.c}]
 // test O_APPEND.
@@ -141,6 +141,8 @@ append1(char *s)
 \end{lstlisting}
 
 テストコードの内容としては、O\_APPENDフラグが正しく機能しているかどうかを確認するために、文字列をファイル末尾に追加する動作を繰り返し、ファイルの内容が正しいかどうかを確認するというものである。
+
+usertestsを実行した結果、問題なくPASSした。
 
 \subsection{システムコールlseekの追加}
 
@@ -205,7 +207,9 @@ sys_lseek(void)
 }
 \end{lstlisting}
 
-方針としては、typeがFD\_INODEの場合に、\code{f->off}を変更することで、lseekを実現することにした。
+方針としては、引数としてfd, offset, whenceを受け取った後、typeがFD\_INODEの場合に、\code{f->off}を変更することで、lseekを実現することにした。
+
+オフセットを変更する際は、ilockによりinodeをロックする処理を加えた。
 
 また、問題文にあるように whence には、\code{SEEK\_SET}、\code{SEEK\_CUR}、\code{SEEK\_END}のいずれかが入ることになるので、それぞれの場合に対応するように場合分けを施し、新しいオフセットを計算するようにした。
 
@@ -349,7 +353,7 @@ lseek1 のテストについては、ファイルディスクリプタのオフ�
 
 \subsection{得られた知見}
 
-
+ファイルディスクリプタのオフセット値を変更することで、ファイルの読み書きを行う位置を変更できることが実感を伴って理解できた。
 
 \subsection{環境}
 
