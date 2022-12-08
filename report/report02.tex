@@ -172,39 +172,62 @@ system callを追加するために、\code{user/usys.pl}に \code{entry("lseek"
 \noindent また、\code{kernel/sysfile.c}に以下を追加した。
 
 \begin{lstlisting}[caption={kernel/sysfile.c}]
-uint64
-sys_lseek(void)
-{
-  int fd, offset, whence;
-  struct file *f; // file pointer
-  struct proc *p = myproc(); // current process
+  uint64
+  sys_lseek(void)
+  {
+    int fd, offset, whence;
   
-  argint(0, &fd);
-  argint(1, &offset);
-  argint(2, &whence);
+    struct file *f; // file pointer
+    struct proc *p = myproc(); // current process
   
-  // fd < 0 : invalid file descriptor
-  // fd >= NOFILE : invalid file descriptor
-  // p->ofile[fd] == 0 : file is not opened 
-  if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
-    return -1;
-
-  if(f->type == FD_INODE){
-    ilock(f->ip);
-    if(whence == SEEK_SET) {
-      f->off = offset; // offset from the beginning of the file (offsetの位置)
-    } else if(whence == SEEK_CUR) {
-      f->off += offset; // offset from the current position (現在のoffsetにoffsetを加えた値)
-    } else if(whence == SEEK_END) {
-      f->off = f->ip->size + offset; // offset from the end of the file (ファイルサイズにoffsetを加えた値)
-    } else {
+    argint(0, &fd);
+    argint(1, &offset);
+    argint(2, &whence);
+  
+    // fd < 0 : invalid file descriptor
+    // fd >= NOFILE : invalid file descriptor
+    // p->ofile[fd] == 0 : file is not opened
+    if(fd < 0 || fd >= NOFILE || (f = p->ofile[fd]) == 0)
       return -1;
+  
+    // 操作対象が通常のファイルの場合
+    if(f->type == FD_INODE){
+      ilock(f->ip);
+  
+      // 更新前のoffsetを保存
+      uint old_offset = f->off;
+  
+      if(whence == SEEK_SET) {
+        f->off = offset; // offset from the beginning of the file (offsetの位置)
+      } else if(whence == SEEK_CUR) {
+        f->off += offset; // offset from the current position (現在のoffsetにoffsetを加えた値)
+      } else if(whence == SEEK_END) {
+        f->off = f->ip->size + offset; // offset from the end of the file (ファイルサイズにoffsetを加えた値)
+      } else {
+        iunlock(f->ip);
+        return -1;
+      }
+  
+      // 計算された新しいオフセットがファイルサイズより大きい場合
+      // new_offset > file_size
+      if(f->off > f->ip->size) {
+        // file sizeを更新
+        f->ip->size = f->off;
+      }
+  
+      // new_offset < 0 OR new_offset > file_size limit
+      if(f->off < 0 || f->off > MAXFILE * BSIZE) {
+        // offsetを更新前の値に戻す
+        f->off = old_offset;
+        iunlock(f->ip);
+        return -1;
+      }
+  
+      iunlock(f->ip);
+      return f->off;
     }
-    iunlock(f->ip);
-    return f->off;
+    return -1;
   }
-  return -1;
-}
 \end{lstlisting}
 
 方針としては、引数としてfd, offset, whenceを受け取った後、typeがFD\_INODEの場合に、\code{f->off}を変更することで、lseekを実現することにした。
@@ -213,6 +236,8 @@ sys_lseek(void)
 
 また、問題文にあるように whence には、\code{SEEK\_SET}、\code{SEEK\_CUR}、\code{SEEK\_END}のいずれかが入ることになるので、それぞれの場合に対応するように場合分けを施し、新しいオフセットを計算するようにした。
 
+また求められている仕様に従い、新しいオフセットがファイルサイズより大きい場合は、ファイルサイズを更新するようにした。
+
 実装全体は、私の個人リポジトリにある。(\url{https://github.com/okoge-kaz/xv6-riscv})
 
 \subsubsection*{テスト}
@@ -220,128 +245,172 @@ sys_lseek(void)
 以下のようなテストコードを追加した。
 
 \begin{lstlisting}[caption={user/usertests.c}]
-    // test lseek.
-    void
-    lseek1(char *s){
-    
-      unlink("seekfile");
-      int fd1 = open("seekfile", O_CREATE|O_RDWR|O_APPEND);
-      if (fd1 < 0) {
-        printf("open failed\n");
-        exit(1);
-      }
-      write(fd1, "hello", 6);
-    
-      int off1 = lseek(fd1, 0, SEEK_SET);// オフセットをファイルの先頭に戻す
-      // off1 = 0
-      if (off1 != 0) {
-        printf("lseek failed\n");
-        printf("off1=%d, expected 0\n", off1);
-        exit(1);
-      }
-    
-      char buf[6];
-      int n = read(fd1, buf, 6);
-      if (n != 6) {
-        printf("read failed\n");
-        printf("buf=%s, n=%d, expected=%d\n", buf, n, 6);
-        exit(1);
-      }
-    
-      int off2 = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
-      // off2 = 200
-      if (off2 != 200) {
-        printf("lseek failed\n");
-        printf("off2=%d, expected 200\n", off2);
-        exit(1);
-      }
-    
-      int off3 = lseek(fd1, -200, SEEK_CUR);// オフセットを現在の位置から200バイト分戻す
-      // off3 = 0
-      if (off3 != 0) {
-        printf("lseek failed\n");
-        printf("off3=%d, expected 0\n", off3);
-        exit(1);
-      }
-    
-      int off4 = lseek(fd1, 0, SEEK_CUR);// オフセットを変更しない。現在のオフセットを得る
-      // off3 == off4
-      if (off3 != off4) {
-        printf("lseek failed\n");
-        printf("off3=%d, off4=%d, expected off3 == off4\n", off3, off4);
-        exit(1);
-      }
-    
-      int off5 = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
-      // off5 = 6 (hello + \0)
-      if (off5 != 6) {
-        printf("lseek failed\n");
-        printf("off5=%d, expected 6\n", off5);
-        exit(1);
-      }
-    
-      int off6 = lseek(fd1, 100, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
-      // off6 = 106 (hello + 100 \0)
-      if (off6 != 106) {
-        printf("lseek failed\n");
-        printf("off6=%d, expected 106\n", off6);
-        exit(1);
-      }
-    
-      int off7 = lseek(fd1, -100, SEEK_CUR);// オフセットを100バイト戻す
-      // off7 = 6
-      if (off7 != 6) {
-        printf("lseek failed\n");
-        printf("off7=%d, expected 6\n", off7);
-        exit(1);
-      }
-    
-      unlink("seekfile");
+  // test lseek.
+  void
+  lseek1(char *s){
+  
+    unlink("seekfile");
+    int fd1 = open("seekfile", O_CREATE|O_RDWR|O_APPEND);
+    if (fd1 < 0) {
+      printf("open failed\n");
+      exit(1);
     }
-    
-    void
-    lseek2(char * s){
-      unlink("seekfile");
-      int fd1 = open("seekfile", O_CREATE|O_WRONLY);
-      if (fd1 < 0) {
-        printf("open failed\n");
-        exit(1);
-      }
-      write(fd1, "Good bye!\n", 11);
-      close(fd1);
-    
-      fd1 = open("seekfile", O_WRONLY);
-      if (fd1 < 0) {
-        printf("open failed\n");
-        exit(1);
-      }
-    
-      lseek(fd1, 5, SEEK_SET);
-      write(fd1, "night!\n", 7);
-      close(fd1);
-    
-      fd1 = open("seekfile", O_RDONLY);
-      if (fd1 < 0) {
-        printf("open failed\n");
-        exit(1);
-      }
-    
-      char buf[20];
-      int n = read(fd1, buf, 20);
-      if (n != 12) {
-        printf("read failed\n");
-        printf("buf=%s, n=%d, expected=%d\n", buf, n, 12);
-        exit(1);
-      }
-    
-      if (strcmp(buf, "Good night!\n") != 0) {
-        printf("read failed\n");
-        printf("buf=%s, expected=%s\n", buf, "Good night!\n");
-        exit(1);
-      }
-    
-      unlink("seekfile");
+    write(fd1, "hello", 6);
+  
+    int off1 = lseek(fd1, 0, SEEK_SET);// オフセットをファイルの先頭に戻す
+    // off1 = 0
+    if (off1 != 0) {
+      printf("lseek failed\n");
+      printf("off1=%d, expected 0\n", off1);
+      exit(1);
     }
+  
+    char buf[6];
+    int n = read(fd1, buf, 6);
+    if (n != 6) {
+      printf("read failed\n");
+      printf("buf=%s, n=%d, expected=%d\n", buf, n, 6);
+      exit(1);
+    }
+  
+    int off2 = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
+    // off2 = 200
+    if (off2 != 200) {
+      printf("lseek failed\n");
+      printf("off2=%d, expected 200\n", off2);
+      exit(1);
+    }
+  
+    int off3 = lseek(fd1, -200, SEEK_CUR);// オフセットを現在の位置から200バイト分戻す
+    // off3 = 0
+    if (off3 != 0) {
+      printf("lseek failed\n");
+      printf("off3=%d, expected 0\n", off3);
+      exit(1);
+    }
+  
+    int off4 = lseek(fd1, 0, SEEK_CUR);// オフセットを変更しない。現在のオフセットを得る
+    // off3 == off4
+    if (off3 != off4) {
+      printf("lseek failed\n");
+      printf("off3=%d, off4=%d, expected off3 == off4\n", off3, off4);
+      exit(1);
+    }
+  
+    int off5 = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+    // off5 = 200
+    if (off5 != 200) {
+      printf("lseek failed\n");
+      printf("off5=%d, expected 200\n", off5);
+      exit(1);
+    }
+  
+    int off6 = lseek(fd1, 100, SEEK_END);// ファイル末尾に100バイト追加する
+    // off6 = 300
+    if (off6 != 300) {
+      printf("lseek failed\n");
+      printf("off6=%d, expected 300\n", off6);
+      exit(1);
+    }
+  
+    int off7 = lseek(fd1, -100, SEEK_CUR);// オフセットを100バイト戻す
+    // off7 = 200
+    if (off7 != 200) {
+      printf("lseek failed\n");
+      printf("off7=%d, expected 200\n", off7);
+      exit(1);
+    }
+  
+    unlink("seekfile");
+  }
+  
+  void
+  lseek2(char * s){
+    unlink("seekfile");
+    int fd1 = open("seekfile", O_CREATE|O_WRONLY);
+    if (fd1 < 0) {
+      printf("open failed\n");
+      exit(1);
+    }
+    write(fd1, "Good bye!\n", 11);
+    close(fd1);
+  
+    fd1 = open("seekfile", O_WRONLY);
+    if (fd1 < 0) {
+      printf("open failed\n");
+      exit(1);
+    }
+  
+    lseek(fd1, 5, SEEK_SET);
+    write(fd1, "night!\n", 7);
+    close(fd1);
+  
+    fd1 = open("seekfile", O_RDONLY);
+    if (fd1 < 0) {
+      printf("open failed\n");
+      exit(1);
+    }
+  
+    char buf[20];
+    int n = read(fd1, buf, 20);
+    if (n != 12) {
+      printf("read failed\n");
+      printf("buf=%s, n=%d, expected=%d\n", buf, n, 12);
+      exit(1);
+    }
+  
+    if (strcmp(buf, "Good night!\n") != 0) {
+      printf("read failed\n");
+      printf("buf=%s, expected=%s\n", buf, "Good night!\n");
+      exit(1);
+    }
+  
+    unlink("seekfile");
+  }
+  
+  void
+  lseek3(char * s){
+    unlink("seekfile");
+    int fd1 = open("seekfile", O_CREATE|O_WRONLY);
+    if (fd1 < 0) {
+      printf("open failed\n");
+      exit(1);
+    }
+    write(fd1, "Hello World", 12);
+    close(fd1);
+  
+    fd1 = open("seekfile", O_RDWR);
+    int offset = lseek(fd1, 200, SEEK_SET);// オフセットをファイルの先頭から200バイト目にセットする
+    if (offset != 200) {
+      printf("lseek failed\n");
+      printf("offset=%d, expected 200\n", offset);
+      exit(1);
+    }
+  
+    int file_size = lseek(fd1, 0, SEEK_END);// オフセットをファイルの末尾まで進める。返値はファイルの大きさ
+    if (file_size != 200) {
+      printf("lseek failed\n");
+      printf("file_size=%d, expected 200\n", file_size);
+      exit(1);
+    }
+  
+    int error = lseek(fd1, -250, SEEK_CUR);// オフセットを現在の位置から250バイト分戻す (オフセットが負になる)
+    if (error != -1) {// error
+      printf("lseek failed\n");
+      printf("error=%d, expected -1\n", error);
+    }
+  
+    // errorが起きた場合は、オフセットは変化しない
+    int offset2 = lseek(fd1, 0, SEEK_CUR);
+    if (offset2 != 200) {
+      printf("lseek failed\n");
+      printf("offset2=%d, expected 200\n", offset2);
+      exit(1);
+    }
+  
+    close(fd1);
+    unlink("seekfile");
+  }
 \end{lstlisting}
 
 lseek1 のテストについては、ファイルディスクリプタのオフセットを移動させ、想定した通りの挙動であるかどうかを確認している。
@@ -349,11 +418,15 @@ lseek1 のテストについては、ファイルディスクリプタのオフ�
 
 また、lseek2では、ファイル書き込みの際に、オフセットを移動させて書き込みを行うことで、想定する文字列が得られるかどうかを確認することを通じて、lseekの挙動を確認している。
 
+lseek3では、仕様として求められている要件が充足されているかを確かめるために、新しいオフセットが負になるようなlseekの呼び出しや、ファイルサイズよりも大きなオフセットを指定するようなlseekの呼び出しを行い、検証を行っている。
+
 この実装についても、個人リポジトリにて全体を公開している。(\url{https://github.com/okoge-kaz/xv6-riscv})
 
 \subsection{得られた知見}
 
 ファイルディスクリプタのオフセット値を変更することで、ファイルの読み書きを行う位置を変更できることが実感を伴って理解できた。
+
+また、ファイルホールという概念についても理解を深めることができた。
 
 \subsection{環境}
 
@@ -368,5 +441,7 @@ lseek1 のテストについては、ファイルディスクリプタのオフ�
 \subsection{参考文献}
 
 UNIX/Linux プログラミング教室 冨永和人, 権堂克彦
+
+Linuxプログラミングインターフェース Michael Kerrisk
 
 \end{document}
