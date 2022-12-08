@@ -550,8 +550,6 @@ sys_lseek(void)
     if(f->off > f->ip->size) {
       // file sizeを更新
       f->ip->size = f->off;
-      // file sizeをdiskに書き込み
-      // iupdate(f->ip);
     }
 
     // new_offset < 0 OR new_offset > file_size limit
